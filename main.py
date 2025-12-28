@@ -276,40 +276,45 @@ def train():
     print(f"Micro F1-Score: {f1_score(all_true, all_preds, average='micro'):.4f}")
     print(f"Exact Match Accuracy: {accuracy_score(all_true, all_preds):.4f}")
 
-    print("\n--- Визуализация специализации экспертов ---")
+    print("\n--- Визуализация иерархии экспертов по всем слоям ---")
     
-    last_layer_idx = CONFIG['n_layers'] - 1
-    # Создаем матрицу: Метки x Эксперты
-    # Число экспертов берем из конфига
-    matrix = np.zeros((len(CONFIG['labels']), CONFIG['n_experts']))
+    n_layers = CONFIG['n_layers']
+    # Создаем сетку графиков: 1 строка, n_layers столбцов
+    fig, axes = plt.subplots(1, n_layers, figsize=(5 * n_layers, 6), sharey=True)
+    
+    if n_layers == 1: axes = [axes] # Если слой один, превращаем в список
 
-    for i, label in enumerate(CONFIG['labels']):
-        stats = expert_stats[label][last_layer_idx]
-        total_uses = sum(stats.values())
-        if total_uses > 0:
-            for exp_id, count in stats.items():
-                # Записываем относительную частоту (процент включения эксперта для этой метки)
-                matrix[i, exp_id] = count / total_uses
+    for layer_idx in range(n_layers):
+        # Строим матрицу: Метки x Эксперты для конкретного слоя
+        matrix = np.zeros((len(CONFIG['labels']), CONFIG['n_experts']))
+        
+        for i, label in enumerate(CONFIG['labels']):
+            stats = expert_stats[label][layer_idx]
+            total_uses = sum(stats.values())
+            if total_uses > 0:
+                for exp_id, count in stats.items():
+                    matrix[i, exp_id] = count / total_uses
+        
+        # Отрисовка конкретного слоя на своем подобъекте (axes)
+        sns.heatmap(
+            matrix, 
+            annot=True, 
+            fmt=".2f", 
+            cmap="YlGnBu", 
+            ax=axes[layer_idx],
+            cbar=False, # Убираем лишние шкалы справа для чистоты
+            xticklabels=[f"E{i}" for i in range(CONFIG['n_experts'])],
+            yticklabels=CONFIG['labels'] if layer_idx == 0 else False
+        )
+        axes[layer_idx].set_title(f"Layer {layer_idx}")
+        axes[layer_idx].set_xlabel("Experts")
 
-    # Отрисовка
-    plt.figure(figsize=(10, 6))
-    sns.heatmap(
-        matrix, 
-        annot=True,          # Показывать числа в ячейках
-        fmt=".2f",           # Формат чисел
-        cmap="YlGnBu",       # Градация цвета (желтый-синий)
-        xticklabels=[f"Exp {i}" for i in range(CONFIG['n_experts'])],
-        yticklabels=CONFIG['labels']
-    )
+    axes[0].set_ylabel("Scientific Labels")
+    plt.suptitle("Specialization Evolution: From Lower to Higher Layers", fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     
-    plt.title(f"Специализация экспертов на слое {last_layer_idx} (MoE)")
-    plt.xlabel("Индексы экспертов")
-    plt.ylabel("Научные области (Labels)")
-    plt.tight_layout()
-    
-    # Сохраняем и показываем
-    plt.savefig("expert_specialization.png")
-    print("График сохранен в файл expert_specialization.png")
+    plt.savefig("expert_evolution.png")
+    print("Иерархический график сохранен в expert_evolution.png")
     plt.show()
 
 if __name__ == "__main__":
