@@ -12,6 +12,9 @@ import collections
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import train_test_split
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 # --- КОНФИГУРАЦИЯ ---
 CONFIG = {
     'vocab_size': 30522,
@@ -273,15 +276,41 @@ def train():
     print(f"Micro F1-Score: {f1_score(all_true, all_preds, average='micro'):.4f}")
     print(f"Exact Match Accuracy: {accuracy_score(all_true, all_preds):.4f}")
 
-    print("\n--- КАКИЕ ЭКСПЕРТЫ ОТВЕЧАЮТ ЗА КАКИЕ НАУКИ (ПОСЛЕДНИЙ СЛОЙ) ---")
-    last_layer = CONFIG['n_layers'] - 1
-    for label in CONFIG['labels']:
-        stats = expert_stats[label][last_layer]
-        if stats:
-            top_3 = stats.most_common(3)
-            print(f"Label [{label}]: Top Experts IDs -> {top_3}")
-        else:
-            print(f"Label [{label}]: Не встретился в валидации")
+    print("\n--- Визуализация специализации экспертов ---")
+    
+    last_layer_idx = CONFIG['n_layers'] - 1
+    # Создаем матрицу: Метки x Эксперты
+    # Число экспертов берем из конфига
+    matrix = np.zeros((len(CONFIG['labels']), CONFIG['n_experts']))
+
+    for i, label in enumerate(CONFIG['labels']):
+        stats = expert_stats[label][last_layer_idx]
+        total_uses = sum(stats.values())
+        if total_uses > 0:
+            for exp_id, count in stats.items():
+                # Записываем относительную частоту (процент включения эксперта для этой метки)
+                matrix[i, exp_id] = count / total_uses
+
+    # Отрисовка
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(
+        matrix, 
+        annot=True,          # Показывать числа в ячейках
+        fmt=".2f",           # Формат чисел
+        cmap="YlGnBu",       # Градация цвета (желтый-синий)
+        xticklabels=[f"Exp {i}" for i in range(CONFIG['n_experts'])],
+        yticklabels=CONFIG['labels']
+    )
+    
+    plt.title(f"Специализация экспертов на слое {last_layer_idx} (MoE)")
+    plt.xlabel("Индексы экспертов")
+    plt.ylabel("Научные области (Labels)")
+    plt.tight_layout()
+    
+    # Сохраняем и показываем
+    plt.savefig("expert_specialization.png")
+    print("График сохранен в файл expert_specialization.png")
+    plt.show()
 
 if __name__ == "__main__":
     train()
